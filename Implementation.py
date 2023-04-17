@@ -4,6 +4,16 @@ import torch.nn.functional as F
 import torchtext as tt
 import math
 
+class SimpleAttention(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self,queries,keys,values,attn_mask = None, bias_k = None, bias_v=None, dropout_p=0.0):
+        if bias_k is not None and bias_v is not None:
+            keys = th.stack(keys, bias_k.view(keys.size(0), 1 , keys.size(2)), 1)
+            values = th.stack(values, bias_v.view(values.size(0), 1 , values.size(2)), 1)
+        A =  F.scaled_dot_product_attention(queries,keys,values,attn_mask,dropout_p)
+        return A, A
+
 
 class LearnedQueryAttention(nn.Module):
     # assuming this shape for tokens:
@@ -33,7 +43,7 @@ class LearnedQueryAttention(nn.Module):
         if attention is not None:
             self.attention = attention
         else:
-            self.attention = tt.nn.ScaledDotProduct(batch_first = True)
+            self.attention = tt.nn.MultiheadAttentionContainer(n_heads,tt.nn.InProjContainer(nn.Identity(), nn.Identity(),nn.Identity()),SimpleAttention(),nn.Identity(),batch_first=True)
 
         self.n_heads = n_heads
         if end_norm == True:
@@ -41,29 +51,6 @@ class LearnedQueryAttention(nn.Module):
         else:
             self.end_norm = nn.Identity()
 
-    def multihead_reshape(self,x):
-        clz = x.size()[-1]
-        assert(clz % self.n_heads == 0)
-        bsz = x.size()[0]
-        new_shape = list(x.size())
-        new_shape[0] = bsz * self.n_heads
-        new_shape[-1] = clz // self.n_heads
-        try:
-            x = x.view(new_shape)
-        except RuntimeError:
-            x = x.contiguous().view(new_shape)
-        return x
-
-    def multihead_unshape(self,x):
-        #TODO is this the problem?
-        # Is this jumbling up the information somehow?
-        clz = x.size()[-1]
-        bsz = x.size()[0]
-        new_shape = list(x.size())
-        new_shape[0] = bsz // self.n_heads
-        new_shape[-1] = clz * self.n_heads
-        x = x.view(new_shape)
-        return x
 
 
     def forward(self, keys,values):
@@ -73,12 +60,10 @@ class LearnedQueryAttention(nn.Module):
         else:
             Q = self.q
         # Q = self.q.repeat(K.size())
-        Q = self.multihead_reshape(Q.expand([K.size(0) , 1 , K.size(2)]))
-        K = self.multihead_reshape(K)
-        V = self.multihead_reshape(V)
+        Q = Q.expand([K.size(0) , 1 , K.size(2)])
+
 
         A, A_w = self.attention(Q, K, V)
-        A = self.multihead_unshape(A)
         if self.w0 is not None:
             A = self.w0(A)
         if self.diagnostic:

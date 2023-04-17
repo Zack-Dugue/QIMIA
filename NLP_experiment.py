@@ -2,12 +2,16 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchtext as tt
+import math
 from torchtext.datasets import WikiText2
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizer , AutoTokenizer,GPT2Tokenizer
-from NLP import NLPClassifier , NLPClassifier2
+from NLP import NLPClassifier , NLPClassifier2, TestModel2
+
+
+
 
 def experiment(epochs,batch_size,lr):
 
