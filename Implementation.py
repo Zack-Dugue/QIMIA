@@ -3,24 +3,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchtext as tt
 import math
+import csv
 
-class SimpleAttention(nn.Module):
+class TrueNorm(nn.Module):
     def __init__(self):
-        super().__init__()
-    def forward(self,queries,keys,values,attn_mask = None, bias_k = None, bias_v=None, dropout_p=0.0):
-        if bias_k is not None and bias_v is not None:
-            keys = th.stack(keys, bias_k.view(keys.size(0), 1 , keys.size(2)), 1)
-            values = th.stack(values, bias_v.view(values.size(0), 1 , values.size(2)), 1)
-        A =  F.scaled_dot_product_attention(queries,keys,values,attn_mask,dropout_p)
-        return A, A
+        super(TrueNorm, self).__init__()
 
 
 class LearnedQueryAttention(nn.Module):
     # assuming this shape for tokens:
       # batch - other dims - channels
-    def __init__(self, k_dim, n_heads, v_dim=None,w0=False,norm_query=False, end_norm = False, attention = None,diagnostic = True):
+    def __init__(self, k_dim, n_heads, v_dim=None,w0=False,norm_query=False, end_norm = True, attention = None, log = False,print_log = False):
         """
-
         :param k_dim:
         :param n_heads:
         :param v_dim:
@@ -31,26 +25,59 @@ class LearnedQueryAttention(nn.Module):
         :param diagnostic:
         """
         super(LearnedQueryAttention, self).__init__()
-        self.diagnostic = diagnostic
-        self.q = nn.Parameter(th.randn(k_dim,requires_grad=True))
+        self.log = log
+        # self.q = nn.Parameter(th.ones(k_dim,requires_grad=True)/th.linalg.norm(th.ones(k_dim)))
+        self.q = nn.Parameter(th.zeros(k_dim,requires_grad=True))
         self.norm_query = norm_query
         assert(k_dim % n_heads == 0)
         if w0:
             assert(v_dim is not None)
             self.w0 = nn.Linear(v_dim,v_dim)
+            self.w0.weight = nn.Parameter(th.eye(v_dim,requires_grad=True))
+            self.w0.bias = nn.Parameter(th.zeros(v_dim,requires_grad=True))
         else:
             self.w0 = None
         if attention is not None:
             self.attention = attention
         else:
-            self.attention = tt.nn.MultiheadAttentionContainer(n_heads,tt.nn.InProjContainer(nn.Identity(), nn.Identity(),nn.Identity()),SimpleAttention(),nn.Identity(),batch_first=True)
+            self.attention = tt.nn.ScaledDotProduct(batch_first = True)
 
         self.n_heads = n_heads
         if end_norm == True:
             self.end_norm = nn.LayerNorm(v_dim)
+
         else:
             self.end_norm = nn.Identity()
+        self.log = log
+        if log:
+            self.Slog = []
+            self.Rlog = []
+            self.A_wlog =[]
+            self.norm_qlog = []
+            self.norm_Alog = []
+        self.print_log = print_log
 
+    def multihead_reshape(self,x):
+        clz = x.size()[-1]
+        assert(clz % self.n_heads == 0)
+        bsz = x.size()[0]
+        new_shape = list(x.size())
+        new_shape[0] = bsz * self.n_heads
+        new_shape[-1] = clz // self.n_heads
+        try:
+            x = x.view(new_shape)
+        except RuntimeError:
+            x = x.contiguous().view(new_shape)
+        return x
+
+    def multihead_unshape(self,x):
+        clz = x.size()[-1]
+        bsz = x.size()[0]
+        new_shape = list(x.size())
+        new_shape[0] = bsz // self.n_heads
+        new_shape[-1] = clz * self.n_heads
+        x = x.view(new_shape)
+        return x
 
 
     def forward(self, keys,values):
@@ -60,15 +87,20 @@ class LearnedQueryAttention(nn.Module):
         else:
             Q = self.q
         # Q = self.q.repeat(K.size())
-        Q = Q.expand([K.size(0) , 1 , K.size(2)])
-
+        Q = self.multihead_reshape(Q.expand([K.size(0) , 1 , K.size(2)]))
+        K = self.multihead_reshape(K)
+        V = self.multihead_reshape(V)
 
         A, A_w = self.attention(Q, K, V)
+        A = self.multihead_unshape(A)
+
         if self.w0 is not None:
             A = self.w0(A)
-        if self.diagnostic:
+        if self.log:
             self.diagnostic_run(A,A_w)
         A = self.end_norm(A)
+        # A = th.sum(values, dim=1,keepdim=True)
+
         return A
 
     def diagnostic_run(self,A,A_w):
@@ -83,61 +115,27 @@ class LearnedQueryAttention(nn.Module):
             A_w = th.unsqueeze(A_w,1)
         num_layers = A_w.size(1)
         S = th.mean(th.sum(-th.log(A_w)*A_w,dim=1),dim=0)/math.log(num_layers)
-        u = th.mean(A_w,0)
-        u = u / th.linalg.norm(u,1)
-        R = -F.kl_div(A_w, u.expand([A_w.size(0),u.size(0)]))
         norm_q = th.linalg.norm(self.q)
+        variance_q = th.var(self.q,0)
         norm_A = th.mean(th.linalg.norm(A))
         u = th.mean(A,0)
         u = u.expand(A.size())
         R = th.mean(th.norm(A-u)**2)
-        print(f"S = {S} , R = {R} , A_w= {th.mean(A_w,0)},  norm_q = {norm_q} , norm_A = {norm_A}")
+        # print(f"S = {S} , R = {R} , A_w= {th.mean(A_w,0)},  norm_q = {norm_q} , norm_A = {norm_A}")
         # print(f"Q = {self.q}")
-        # print(f" A_w= {th.mean(A_w,0)}")
+        if self.print_log:
+            print(f" A_w= {th.mean(A_w,0)}, norm_q = {norm_q}, variance_q = {variance_q}")
+        self.Slog.append(float(th.nan_to_num(S)))
+        self.Rlog.append(float(R))
+        self.A_wlog.append(th.mean(A_w,0).tolist())
+        self.norm_qlog.append(float(norm_q))
+        self.norm_Alog.append(float(norm_A))
+    def get_log(self):
+        return {"S value" : self.Slog, "R value" : self.Rlog, "attn weight" : self.A_wlog, "Norm of Query" : self.norm_qlog, "Norm of Output Attention" :  self.norm_Alog}
 
-class LQASimple(nn.Module):
-    """This model is INEFFICIENT , contains uncessary projection layers.
-    IT's soley a debugging tool"""
-    def __init__(self, k_dim, n_heads, v_dim=None,w0=False,norm_query=False, end_norm = True, attention = None,diagnostic = False):
-        super().__init__()
-        self.diagnostic = diagnostic
-        self.attention = nn.MultiheadAttention(v_dim,n_heads,vdim=v_dim,kdim=k_dim,batch_first=True)
-        # nn.MultiheadAttention()
-        self.norm = nn.LayerNorm(v_dim)
-        self.q = th.ones(k_dim)/th.linalg.norm(th.ones(k_dim))
-    def forward(self,keys,values):
-        K , V = keys,values
-        # if self.norm_query:
-        #     Q = self.q/th.linalg.norm(self.q)
-        # else:
-        #     Q = self.q
-        # Q = self.q.repeat(K.size())
-        Q = self.q
-        Q = Q.expand([K.size(0) , 1 , K.size(2)])
-
-
-        A, A_w = self.attention(Q, K, V)
-        if self.diagnostic:
-            self.diagnostic_run(A,A_w)
-        return self.norm(A)
-
-    def diagnostic_run(self,A,A_w):
+class EfficientLQA(nn.Module):
+    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, norm = 'pre',num_keys = None):
         """
-        Performs a diagnostic analysis of the run and saves it to a buffer.
-        :param A: the actual output of the LQA after the multihead unshape
-        :param A_w: attention weights of the shape [Num_Heads * Bsz,NumLayers,1]
-        :return:
-        """
-        A_w = th.squeeze(A_w)
-        num_layers = A_w.size(1)
-        S = th.mean(th.sum(-th.log(A_w)*A_w,dim=1),dim=0)/math.log(num_layers)
-        norm_q = th.linalg.norm(F.linear(self.q , self.attention.q_proj_weight, bias=None))
-        norm_A = th.mean(th.linalg.norm(A))
-        print(f"S = {S} , norm_q = {norm_q} , norm_A = {norm_A}")
-class BaseBlock(nn.Module):
-    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, norm = 'pre'):
-        """
-
         :param key_dim: the key dimension
         :param embed_dim: the value dimension
         :param num_lqa_heads: the number of Learned Query Attention Heads
@@ -146,13 +144,84 @@ class BaseBlock(nn.Module):
                     'post key' applies the norm to the key.
                     'post both' applies the norm to the values and the keys.
         """
+        super(EfficientLQA, self).__init__()
+        if num_lqa_heads == None:
+            # implement some way of inteligently selecting a reasonable
+            # number of heads based on the key_dim
+            num_lqa_heads = 4
+        if norm == 'pre':
+            self.norm = nn.LayerNorm(embed_dim)
+        else:
+            self.norm = nn.Identity()
+        self.num_lqa_heads = num_lqa_heads
+        self.QConv = nn.Conv1d(key_dim, num_lqa_heads,1, bias=False, groups=num_lqa_heads)
+        self.w0 = nn.Linear(embed_dim,embed_dim)
+
+
+    def multihead_reshape(self,x):
+        clz = x.size()[-1]
+        assert(clz % self.n_heads == 0)
+        bsz = x.size()[0]
+        new_shape = list(x.size())
+        new_shape[0] = bsz * self.n_heads
+        new_shape[-1] = clz // self.n_heads
+        try:
+            x = x.view(new_shape)
+        except RuntimeError:
+            x = x.contiguous().view(new_shape)
+        return x
+
+    def multihead_unshape(self,x):
+        clz = x.size()[-1]
+        bsz = x.size()[0]
+        new_shape = list(x.size())
+        new_shape[0] = bsz // self.n_heads
+        new_shape[-1] = clz * self.n_heads
+        x = x.view(new_shape)
+        return x
+
+    #There's an issue with keeping everything contiguous here.
+    # We have to do our convolution over the token dimension.
+    # And we want it to output (batch, token, head)
+    # But then we have to flatten the head dimension into the batch dimension.
+    # Which gives us some contiguousness issues.
+    def forward(self,keys,values : th.Tensor):
+        #dims of inputs: (batch, token, channel)
+        A_w = self.QConv(keys)
+        #Aw dims (batch, token, head)
+        A_w = th.permute(A_w,[0,2,1])
+        A_w = th.flatten(A_w,0,1)
+        V = self.multihead_reshape(values)
+        A_w = A_w.repeat(1,1,self.values.size(-1))
+        out = th.matmul(A_w, V)
+        out = self.multihead_unshape(out)
+        out = self.norm(out)
+        out = self.w0(out)
+        return out
+
+    def get_log(self):
+        return None
+
+class BaseBlock(nn.Module):
+    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, norm = 'pre',key_norm = False):
+        """
+        :param key_dim: the key dimension
+        :param embed_dim: the value dimension
+        :param num_lqa_heads: the number of Learned Query Attention Heads
+        :param Norm: None implies no norm is Used.
+                    'pre' applies the norm after the LQA.
+                    'pre + key' applies the norm after the LQA and then also to the key.
+                    'post value' applies the norm to the values.
+                    'post key' applies the norm to the key.
+                    'post both' applies the norm to the values and the keys.
+        """
         super(BaseBlock,self).__init__()
         if num_lqa_heads == None:
             # implement some way of inteligently selecting a reasonable
             # number of heads absed on the key_dim
-            num_lqa_heads = 1
+            num_lqa_heads = 4
         if norm == 'pre': lqa_end_norm = True
-        else: lqa_end_norm = True
+        else: lqa_end_norm = False
         if norm == 'post value':
             self.value_norm = nn.LayerNorm(embed_dim)
             self.key_norm = nn.Identity()
@@ -240,15 +309,15 @@ class OutputBlock(nn.Module):
         if num_lqa_heads == None:
             # implement some way of inteligently selecting a reasonable
             # number of heads absed on the key_dim
-            num_lqa_heads = 8
+            num_lqa_heads = 1
         self.key_dim = key_dim
         self.embed_dim = embed_dim
-        self.LQA = LearnedQueryAttention(key_dim, num_lqa_heads, v_dim=embed_dim,end_norm=True, w0=True,diagnostic=diagnostic)
+        self.LQA = LearnedQueryAttention(key_dim, num_lqa_heads, v_dim=embed_dim,end_norm=True, w0=True,print_log=False)
         # self.LQA = LQASimple(key_dim, num_lqa_heads, v_dim=embed_dim, w0=True,diagnostic=diagnostic)
     def block(self,A, **kwargs):
         pass
     def forward(self,keys,values,**aux):
-        A = self.LQA(keys,values)
+        A = th.squeeze(self.LQA(keys,values))
         if aux==None:
             output = self.block(A)
         else:
@@ -288,7 +357,6 @@ class QIMIA_Sequential(nn.Module):
         return self.blocks.parameters()
     def forward(self,*x,aux_list=[]):
         """
-
         :param x: the input
         :param aux: a list of dictionaries representing the auxillary kwargs for each block.
         :return:
@@ -304,6 +372,42 @@ class QIMIA_Sequential(nn.Module):
 
     def __len__(self):
         return len(self.blocks)
+
+    def get_logs(self,path = None):
+        logs_dict = {}
+        for i, block in enumerate(self.blocks):
+            if issubclass(block.__class__,OutputBlock) or issubclass(block.__class__,BaseBlock):
+                logs = block.LQA.get_log()
+                logs_dict.update({f"block_{i}":logs})
+        if path == None:
+            return logs_dict
+        else:
+            for (name,block_log) in logs_dict.items():
+                f = open(path + "/" + name + ".csv", "w",newline='')
+                writer = csv.writer(f)
+                keys = list(block_log.keys())
+                new_keys = []
+                for key in keys:
+                   if list ==type(block_log[key][0]):
+                       for i in range(len(block_log[key][0])):
+                        new_keys.append(f"{key}_{i}")
+                   else:
+                       new_keys.append(key)
+                writer.writerow(new_keys)
+                log_this = [[list(block_log.values())[j][i] for j in range(len(list(block_log.values())))] for i in range(len(list(block_log.values())[0]))]
+                new_log_this = []
+                for row in log_this:
+                    row_list = []
+                    for element in row:
+                        if list == type(element):
+                            for i in range(len(element)):
+                                row_list.append(element[i])
+                        else:
+                            row_list.append(element)
+                    new_log_this.append(row_list)
+                writer.writerows(new_log_this)
+        print("Done Logging")
+
 
 
 class QIMIA_Parallel(nn.Module):
