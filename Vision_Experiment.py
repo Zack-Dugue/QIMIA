@@ -111,10 +111,10 @@ LR = .0005
 def experiment():
     train_loader = get_dataloader(64,16,split='train')
     test_loader = get_dataloader(64,16,split='test')
-    model = QIMIA_ViT(128,128,64,8,10,3)
+    model = QIMIA_ViT(512,512,64,16,10,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"number of QIMIA params: {num_params}")
-    model = tv.models.VisionTransformer(64,8,3,8,256,1024)
+    model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     num_params: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"number of default VIT params : {num_params}")
 

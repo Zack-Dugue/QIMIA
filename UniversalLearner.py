@@ -6,6 +6,7 @@ from Implementation import BaseBlock, InitializerBlock, OutputBlock , TransformB
 from transformers import AutoTokenizer, PreTrainedTokenizer
 from NLP import FF_Block, AttentionBlock, GeGLU
 import math
+F.multi_head_attention_forward()
 
 class CrossAttentionBlock(BaseBlock):
     def __init__(self,key_dim, embed_dim, cross_dim, num_cross_heads=1):
@@ -38,10 +39,10 @@ class CrossAttentionBlock(BaseBlock):
 
         return key, value
 
-class MemoryBlock(InitializerBlock):
+class MemoryBlock(nn.Module):
     def __init__(self, external_key_dim, external_embed_dim, internal_key_dim, internal_embed_dim, num_external_heads = 8, hidden_dim = 512):
         super().__init__()
-        self.external_memory_attention = nn.MultiheadAttention(external_embed_dim, num_external_heads, kdim= external_key_dim, batch_first=True)
+        self.external_memory_attention = tt.nn.ScaledDotProduct()
         self.norm0 = nn.LayerNorm(external_embed_dim)
         self.linear0 = nn.Linear(external_embed_dim,hidden_dim)
         #these PReLU's probably won't work.
@@ -54,11 +55,7 @@ class MemoryBlock(InitializerBlock):
         A = self.external_memory_attention(keys,values,query)
         A = self.norm0(A)
         A = self.linear0(A)
-        key = self.key_act(A)
-        key = self.key_project(key)
-        value = self.value_act(A)
-        value = self.value_project(value)
-        return key , value
+        return A
 
 class HeadBlock(OutputBlock):
     def __init__(self,key_dim,embed_dim, output_dim, hidden_layer_dim = 2048):
@@ -68,21 +65,10 @@ class HeadBlock(OutputBlock):
         self.L2 = nn.Linear(hidden_layer_dim//2,output_dim)
 
 class UniversalLearner(nn.Module):
-    def __init__(self, external_key_dim, external_embed_dim,  internal_key_dim, internal_embed_dim, core,encoder, decoder,
+    def __init__(self,key_dim,embed_dim, core : nn.Module, key_head : nn.Module, value_head : nn.Module, query_head :nn.Module,encoder : nn.Module, decoder : nn.Module,
                  num_latents = 512):
         super().__init__()
         self.external_mem_attn = MemoryBlock(external_key_dim,external_embed_dim,internal_key_dim,internal_embed_dim)
-        self.query_head  = HeadBlock(internal_key_dim, internal_embed_dim, external_key_dim)
-        self.key_head  = HeadBlock(internal_key_dim, internal_embed_dim, external_key_dim)
-        self.value_head = HeadBlock(internal_key_dim, internal_embed_dim, external_embed_dim)
-        self.encoder = encoder
-        self.decoder = decoder
-        self.core = core
-        self.num_latents = num_latents
-        # todo:
-        #  handle the initial external values, and external keys and external queries
-        #  just seems like a massive pain tbh ripppp.
-    def forward(self,x,num_iterations = 10):
-        # for i in range(num_iterations-1):
+
 
 

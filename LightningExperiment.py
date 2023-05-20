@@ -44,9 +44,11 @@ def experiment(path, model_name, num_nodes, num_dataloaders, batch_size, learnin
     accelerator = "auto"
     devices = gpus
     gpus = "auto"
-    strategy = pl.strategies.DDPStrategy(static_graph=False)
+    strategy = pl.strategies.DDPStrategy(static_graph=True)
     # strategy = "auto"
     # profiler = PyTorchProfiler(dirpath=path, filename='perf-logs')
+    model = QIMIA_ViT(512,512,64,16,10,12,input_attention_heads =12, FF_hidden_dim = 3072, output_hidden_dim=3072)
+    model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     profiler = None
     logger = TensorBoardLogger(os.path.join(path, 'tb_logs'), name=model_name)
     trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=num_epochs, strategy=strategy,
@@ -114,5 +116,4 @@ if __name__ == "__main__":
             pass
             # raise FileExistsError
     print(f"Experiment Info and Files stored in:{path}")
-    model_name = "fred"
     experiment(path, model_name, num_nodes, num_dataloaders, batch_size, lr, NumEpochs, gpus,model_type,data_type)
