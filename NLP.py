@@ -2,7 +2,7 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchtext as tt
-from Implementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
+from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
 from transformers import AutoTokenizer, PreTrainedTokenizer
 import math
 
@@ -74,7 +74,7 @@ class OutputClassifierBlock(OutputBlock):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to " \
                              "an output layer for NLP QIMIA")
-        A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(2))
+        A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(1))
         A = th.squeeze(F.avg_pool1d(th.permute(A,[0,2,1]), kernel_size=num_input_tokens, stride=1))
 
         A = self.output_norm(A)
@@ -88,9 +88,9 @@ class OutputClassifierBlock(OutputBlock):
 class NLP_EncoderBlock(InitializerBlock):
     def __init__(self,key_dim,embed_dim,input_token_dim,max_input_width = 10000):
         super().__init__()
-        self.input_key_embed = nn.Embedding(input_token_dim, embed_dim)
+        self.input_key_embed = nn.Embedding(input_token_dim, key_dim)
         self.input_val_embed = nn.Embedding(input_token_dim, embed_dim)
-        self.PE_key_encode = nn.Linear(embed_dim,embed_dim)
+        self.PE_key_encode = nn.Linear(embed_dim,key_dim)
         self.PE_val_encode = nn.Linear(embed_dim,embed_dim)
         self.PE =  self.make_positional_encoding(embed_dim,max_len=max_input_width)
         #implement token flattening thing a ma doohicky
@@ -278,7 +278,7 @@ class EncoderLayer(nn.Module):
 class TransformerBlock(BaseBlock):
     def __init__(self,key_dim,embed_dim,num_heads):
         super().__init__(key_dim,embed_dim)
-        self.transformer = nn.TransformerEncoderLayer(256, num_heads, dropout=0, batch_first=True, norm_first=True)
+        self.transformer = nn.TransformerEncoderLayer(embed_dim, num_heads, dropout=0, batch_first=True, norm_first=True)
 
         self.key_linear = nn.Linear(embed_dim,key_dim)
         self.value_linear = nn.Linear(embed_dim,embed_dim)

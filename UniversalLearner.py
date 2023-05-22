@@ -39,23 +39,7 @@ class CrossAttentionBlock(BaseBlock):
 
         return key, value
 
-class MemoryBlock(nn.Module):
-    def __init__(self, external_key_dim, external_embed_dim, internal_key_dim, internal_embed_dim, num_external_heads = 8, hidden_dim = 512):
-        super().__init__()
-        self.external_memory_attention = tt.nn.ScaledDotProduct()
-        self.norm0 = nn.LayerNorm(external_embed_dim)
-        self.linear0 = nn.Linear(external_embed_dim,hidden_dim)
-        #these PReLU's probably won't work.
-        self.key_act = nn.PReLU(hidden_dim)
-        self.key_project = nn.Linear(hidden_dim,internal_key_dim)
-        self.value_act = nn.PReLU(hidden_dim)
-        self.value_project = nn.Linear(hidden_dim, internal_embed_dim)
-    def block(self,keys, values, query):
-        # should be of the proper dimensionality.
-        A = self.external_memory_attention(keys,values,query)
-        A = self.norm0(A)
-        A = self.linear0(A)
-        return A
+
 
 class HeadBlock(OutputBlock):
     def __init__(self,key_dim,embed_dim, output_dim, hidden_layer_dim = 2048):
@@ -68,7 +52,7 @@ class UniversalLearner(nn.Module):
     def __init__(self,key_dim,embed_dim, core : nn.Module, key_head : nn.Module, value_head : nn.Module, query_head :nn.Module,encoder : nn.Module, decoder : nn.Module,
                  num_latents = 512):
         super().__init__()
-        self.external_mem_attn = MemoryBlock(external_key_dim,external_embed_dim,internal_key_dim,internal_embed_dim)
+        self.external_mem_attn = tt.
 
 
 

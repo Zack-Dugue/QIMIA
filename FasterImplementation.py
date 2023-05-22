@@ -66,7 +66,7 @@ class BaseBlock(nn.Module):
         # value = th.randn_like(value)
         if layer_num is not None:
             keys[:,layer_num,:] = key
-            values[:,layer_num,:] = key
+            values[:,layer_num,:] = value
             return keys , values
 
         if append == True:
@@ -170,7 +170,7 @@ class QIMIA_Sequential(nn.Module):
         :param aux: a list of dictionaries representing the auxillary kwargs for each block.
         :return:
         """
-        start_values , start_keys = self.blocks[0](*x,**aux_list[0])
+        start_keys , start_values = self.blocks[0](*x,**aux_list[0])
         num_start = start_values.size(1)
         num_other_layers = len(self.blocks)-2
         values = th.zeros(start_values.size(0), num_start + num_other_layers , start_values.size(2),device=start_values.device)

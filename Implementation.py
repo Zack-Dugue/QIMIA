@@ -1,14 +1,14 @@
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
-import torchtext as tt
+from utils import ScaledDotProduct
 import math
 import csv
 
 class LearnedQueryAttention(nn.Module):
     # assuming this shape for tokens:
       # batch - other dims - channels
-    def __init__(self, k_dim, n_heads, v_dim=None,w0=False,norm_query=False, end_norm = True, attention = None, log = False,print_log = False):
+    def __init__(self, k_dim, n_heads, v_dim=None,w0=True,norm_query=False,attn_bias=False, end_norm = True, attention = None, log = False,print_log = False):
         """
         :param k_dim:
         :param n_heads:
@@ -35,7 +35,7 @@ class LearnedQueryAttention(nn.Module):
         if attention is not None:
             self.attention = attention
         else:
-            self.attention = tt.nn.ScaledDotProduct(batch_first = True)
+            self.attention = ScaledDotProduct(batch_first = True)
 
         self.n_heads = n_heads
         if end_norm == True:
@@ -43,6 +43,14 @@ class LearnedQueryAttention(nn.Module):
 
         else:
             self.end_norm = nn.Identity()
+        self.attn_bias = attn_bias
+        if attn_bias:
+            self.v_bias = nn.Parameter(th.zeros(k_dim,requires_grad=True))
+            self.k_bias = nn.Parameter(th.zeros(k_dim,requires_grad=True))
+        else:
+            self.v_bias = None
+            self.k_bias = None
+
         self.log = log
         if log:
             self.Slog = []
@@ -59,10 +67,7 @@ class LearnedQueryAttention(nn.Module):
         new_shape = list(x.size())
         new_shape[0] = bsz * self.n_heads
         new_shape[-1] = clz // self.n_heads
-        try:
-            x = x.view(new_shape)
-        except RuntimeError:
-            x = x.contiguous().view(new_shape)
+        x = x.contiguous().view(new_shape)
         return x
 
     def multihead_unshape(self,x):
@@ -85,8 +90,14 @@ class LearnedQueryAttention(nn.Module):
         Q = self.multihead_reshape(Q.expand([K.size(0) , 1 , K.size(2)]))
         K = self.multihead_reshape(K)
         V = self.multihead_reshape(V)
+        if self.attn_bias:
+            v_bias = self.multihead_reshape(self.v_bias.expand([K.size(0) , 1 , K.size(2)]))
+            k_bias = self.multihead_reshape(self.k_bias.expand([K.size(0) , 1 , K.size(2)]))
+            A, A_w = self.attention(Q, K, V,bias_k = k_bias, bias_v = v_bias)
+        else:
+            A, A_w = self.attention(Q,K,V)
 
-        A, A_w = self.attention(Q, K, V)
+
         A = self.multihead_unshape(A)
 
         if self.w0 is not None:

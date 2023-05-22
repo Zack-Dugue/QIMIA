@@ -21,7 +21,7 @@ def experiment(epochs,batch_size,lr):
     auto_tokenize.pad_token = auto_tokenize.eos_token
     dataset = tt.datasets.AG_NEWS()[0]
     dataloader = DataLoader(dataset,batch_size=batch_size,shuffle=True)
-    test_model = NLPClassifier2(256,256,50257,4,1).to(device)
+    test_model = NLPClassifier2(256,128,50257,4,1).to(device)
     # test_model = TestModel2(0).to(device)
     loss_fun = nn.CrossEntropyLoss()
     optimizer = th.optim.Adam(test_model.parameters(),lr)
