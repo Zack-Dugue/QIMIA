@@ -16,6 +16,16 @@ class PReLU(nn.Module):
         x = th.permute(x,[0,2,1])
         return x
 
+class PSeLU(nn.Module):
+    def __init__(self,embed_dim):
+        super().__init__()
+        self.a = nn.Parameter(th.ones(embed_dim,requires_grad=True))
+        self.b = nn.Parameter(th.zeros(embed_dim,requires_grad=True))
+        self.sigm = nn.Sigmoid()
+    def forward(self,x):
+
+        return self.sigm(x*self.a+self.b)*x
+
 class VisionInitializer(InitializerBlock):
     def __init__(self, image_size, patch_size, embedding_dim, key_dim):
         super(VisionInitializer, self).__init__()
@@ -89,15 +99,17 @@ class FF_Block(BaseBlock):
     def __init__(self,key_dim,embed_dim, hidden_layer_dim = 1024):
         super().__init__(key_dim,embed_dim)
         self.L0 = nn.Linear(embed_dim, hidden_layer_dim)
-        self.act = nn.GELU()
+        self.value_act = PSeLU(hidden_layer_dim)
+        self.key_act = PSeLU(hidden_layer_dim)
         self.L_values = nn.Linear(hidden_layer_dim,embed_dim)
         self.L_keys = nn.Linear(hidden_layer_dim,key_dim)
 
     def block(self, A):
         A = self.L0(A)
-        A = self.act(A)
-        value = self.L_values(A)
-        key = self.L_keys(A)
+        value = self.value_act(A)
+        value = self.L_values(value)
+        key = self.key_act(A)
+        key = self.L_keys(key)
         return key, value
 
 class AttentionBlock(BaseBlock):

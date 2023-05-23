@@ -4,7 +4,7 @@ import torch.nn.functional  as F
 import math
 import torchvision as tv
 from torch.utils.data import DataLoader
-from Vision import QIMIA_ViT
+from UniversalLearner import make_UL
 import matplotlib.pyplot as plt
 
 import torchvision.datasets as datasets
@@ -45,6 +45,7 @@ def get_dataloader(image_size, batch_size, split='train'):
 
 def train_and_eval(model, optimizer, device, train_loader, test_loader, num_epochs, DEBUG=True):
     # Train model
+    th.autograd.set_detect_anomaly(True)
     train_loss_list = []
     test_loss_list = []
     mega_loss_list = []
@@ -56,7 +57,7 @@ def train_and_eval(model, optimizer, device, train_loader, test_loader, num_epoc
             optimizer.zero_grad()
             outputs = model(images)
             loss = F.cross_entropy(outputs, labels)
-            mega_loss_list.append(loss)
+            # mega_loss_list.append(loss)
             print( f"Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item():.4f}")
             loss.backward()
             optimizer.step()
@@ -111,7 +112,7 @@ LR = .0005
 def experiment():
     train_loader = get_dataloader(64,16,split='train')
     test_loader = get_dataloader(64,16,split='test')
-    model = QIMIA_ViT(512,512,64,16,10,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
+    model = make_UL(256,256,256,256,65,10,64,encoder_dim=128)
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"number of  params: {num_params}")
     # model = tv.models.VisionTransformer(64,16,12,12,768,3072)

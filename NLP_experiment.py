@@ -21,8 +21,10 @@ def experiment(epochs,batch_size,lr):
     auto_tokenize.pad_token = auto_tokenize.eos_token
     dataset = tt.datasets.AG_NEWS()[0]
     dataloader = DataLoader(dataset,batch_size=batch_size,shuffle=True)
-    test_model = NLPClassifier2(256,128,50257,4,1).to(device)
+    test_model = NLPClassifier2(256,128,50257,4,4).to(device)
     # test_model = TestModel2(0).to(device)
+    num_params = sum(p.numel() for p in test_model.parameters() if p.requires_grad)
+    print(f"number of  params: {num_params}")
     loss_fun = nn.CrossEntropyLoss()
     optimizer = th.optim.Adam(test_model.parameters(),lr)
     th.nn.utils.clip_grad_norm_(test_model.parameters(), 2, norm_type=2.0, error_if_nonfinite=False, foreach=None)

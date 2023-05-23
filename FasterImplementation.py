@@ -82,8 +82,8 @@ class InitializerBlock(nn.Module):
 
     def block(self,*args):
         pass
-    def forward(self,*args):
-        keys , values = self.block(*args)
+    def forward(self,*args,**kwargs):
+        keys , values = self.block(*args,**kwargs)
         if type(keys) in [tuple, list] and type(values) in [tuple,list]:
             keys = th.stack(keys,1)
             values = th.stack(values,1)
@@ -169,10 +169,14 @@ class QIMIA_Sequential(nn.Module):
         :param x: the input
         :param aux: a list of dictionaries representing the auxillary kwargs for each block.
         :return:
+
         """
-        start_keys , start_values = self.blocks[0](*x,**aux_list[0])
+        if len(aux_list)!=0:
+            start_keys, start_values = self.blocks[0](*x,**aux_list[0])
+        else:
+          start_keys , start_values = self.blocks[0](*x)
         num_start = start_values.size(1)
-        num_other_layers = len(self.blocks)-2
+        num_other_layers = len(self.blocks)-1-(issubclass(self.blocks[-1].__class__,OutputBlock))
         values = th.zeros(start_values.size(0), num_start + num_other_layers , start_values.size(2),device=start_values.device)
         values[:,0:num_start,:] = start_values
         keys = th.zeros(start_keys.size(0), num_start + num_other_layers , start_keys.size(2),device=start_values.device)
@@ -183,7 +187,7 @@ class QIMIA_Sequential(nn.Module):
             for(i, (block,aux)) in enumerate(zip(self.blocks[1:],aux_list[1:])):
                     x = block(*x, **aux,layer_num = num_start+i)
         else:
-            for (i,block) in enumerate(self.blocks):
+            for (i,block) in enumerate(self.blocks[1:]):
                 x = block(*x,layer_num = num_start+i)
         return x
 
