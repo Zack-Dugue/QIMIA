@@ -49,7 +49,7 @@ class VisionInitializer(InitializerBlock):
         self.position_embedding_values = nn.Parameter(th.randn(1, self.num_patches + 1, embedding_dim))
         self.position_embedding_keys = nn.Parameter(th.randn(1, self.num_patches + 1, key_dim))
         self.cls_token_value = nn.Parameter(th.randn(1, 1, embedding_dim))
-        self.cls_token_key = nn.Parameter(th.randn(1, 1, embedding_dim))
+        self.cls_token_key = nn.Parameter(th.randn(1, 1, key_dim))
         self.flatten_to_token = nn.Flatten(0,1)
     def chop_to_patches(self, x, b, c):
         ''' Chops each image in batch x into patches of dimensions patch_size**2.

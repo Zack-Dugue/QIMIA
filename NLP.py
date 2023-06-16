@@ -47,13 +47,14 @@ class AttentionBlock(BaseBlock):
         self.linear_key_out = nn.Linear(embed_dim,key_dim)
         self.value_act = PReLU(embed_dim)
         self.linear_value_out = nn.Linear(embed_dim,embed_dim)
-    def block(self,A,num_input_tokens= None):
+    def block(self,A,num_input_tokens= None, src_mask=None):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to" \
                              "an attention layer for NLP QIMIA")
+        if src_mask is None:
+            raise ValueError("Need to specify the causal mask")
         A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(1))
-
-        o = self.attention(A)[0]
+        o = self.attention(A,attn_mask = src_mask)[0]
         key = self.key_act(o)
         key = self.linear_key_out(key)
         value = self.value_act(o)
@@ -107,12 +108,12 @@ class NLP_EncoderBlock(InitializerBlock):
         pe[:, 0, 1::2] = th.cos(position * div_term)
         return pe
     def block(self, x):
-        x_key = self.input_key_embed(self.flatten_to_token(x))
-        x_val = self.input_val_embed(self.flatten_to_token(x))
+        x_key = self.input_key_embed(x)
+        x_val = self.input_val_embed(x)
         PE_key = self.flatten_to_token(self.PE_key_encode(self.PE[:x.size(1)]).repeat([x.size(0),1,1]))
         PE_val = self.flatten_to_token(self.PE_val_encode(self.PE[:x.size(1)]).repeat([x.size(0),1,1]))
-        # return  [x_key,PE_key] , [x_val, PE_val]
-        return x_key , x_val
+        return  [x_key,PE_key] , [x_val, PE_val]
+        # return x_key , x_val
 
 class NLPClassifier(nn.Module):
     def __init__(self,key_dim,embed_dim, input_token_dim, num_output_classes, num_layers, input_attention_heads = 8, FF_hidden_dim=1024,output_hidden_dim = 2048):
@@ -138,6 +139,48 @@ class NLPClassifier(nn.Module):
                 kwarg_list.append({})
         return self.model(x,aux_list = kwarg_list)
 
+class LanguageModelHead(OutputBlock):
+    def __init__(self,key_dim,embed_dim,vocab_dim, hidden_dim = 2048):
+        super().__init__(key_dim,embed_dim)
+        self.L0 = nn.Linear(embed_dim,hidden_dim)
+        self.act = nn.GELU()
+        self.L1 = nn.Linear(hidden_dim,vocab_dim)
+        self.out = nn.Softmax()
+    def block(self,A):
+        A = self.L0(A)
+        A = self.act(A)
+        A = self.L1(A)
+        A = self.out(A)
+        return A
+
+class NLP_TextModel(nn.Module):
+    def __init__(self,key_dim,embed_dim, input_token_dim, num_output_classes, num_layers, input_attention_heads = 8, FF_hidden_dim=1024,output_hidden_dim = 2048):
+        super().__init__()
+        blocks = [NLP_EncoderBlock(key_dim,embed_dim,input_token_dim)]
+        for i in range(num_layers):
+            blocks.append(AttentionBlock(key_dim, embed_dim, input_attention_heads))
+            blocks.append(FF_Block(key_dim,embed_dim,hidden_layer_dim=FF_hidden_dim))
+        blocks.append(LanguageModelHead(key_dim,embed_dim,num_output_classes))
+        # blocks[1].LQA.diagnostic = True
+        self.model = QIMIA_Sequential(blocks)
+
+
+    def parameters(self):
+        params = self.model.parameters()
+        return self.model.parameters()
+
+    def generate_square_subsequent_mask(self, sz):
+        mask = (th.triu(th.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+    def forward(self,x,src_mask):
+        kwarg_list = []
+        for i in range(len(self.model)):
+            if i % 2 == 1:
+                kwarg_list.append({"num_input_tokens" : x.size(1), "src_mask" : src_mask})
+            else:
+                kwarg_list.append({})
+        return self.model(x,aux_list = kwarg_list)
 
 
 class FF_Encoder_Layer_Component(nn.Module):

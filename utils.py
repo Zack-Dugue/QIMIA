@@ -2,7 +2,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch as th
 from typing import Optional, Tuple
+from functools import reduce
+#Stolen from  https://stackoverflow.com/questions/6800193/what-is-the-most-efficient-way-of-finding-all-the-factors-of-a-number-in-python
+def factors(n):
+    return reduce(list.__add__,
+                ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0))
 
+def get_heads(key_dim,min_size=8):
+    factor_list = factors(key_dim)
+    factor_list.sort()
+    for factor in factor_list:
+        if factor >= min_size:
+            return key_dim/factor
 #stolen from Torch Text
 class ScaledDotProduct(th.nn.Module):
     def __init__(self, dropout=0.0, batch_first=False) -> None:
@@ -235,3 +246,23 @@ class MultiheadAttentionContainer(th.nn.Module):
             attn_output = attn_output.transpose(-3, -2)
 
         return attn_output, attn_output_weights
+
+#taken from the LucidRain perciever IO github:
+def fourier_encode(x, max_freq, num_bands = 4):
+    x = x.unsqueeze(-1)
+    device, dtype, orig_x = x.device, x.dtype, x
+
+    scales = th.linspace(1., max_freq / 2, num_bands, device = device, dtype = dtype)
+    scales = scales[(*((None,) * (len(x.shape) - 1)), Ellipsis)]
+
+    x = x * scales * th.pi
+    x = th.cat([x.sin(), x.cos()], dim = -1)
+    x = th.cat((x, orig_x), dim = -1)
+    return x
+
+if __name__ == '__main__':
+    print(f"num heads 16 {get_heads(16,8)}")
+    print(f"num heads 64 {get_heads(64,8)}")
+    print(f"num heads 128 {get_heads(128,8)}")
+    print(f"num heads 69 {get_heads(69,8)}")
+    print(f"num heads 124 {get_heads(124,8)}")

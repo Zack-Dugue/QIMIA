@@ -59,7 +59,7 @@ def train_and_eval(model, optimizer, device, train_loader, test_loader, num_epoc
             loss = F.cross_entropy(outputs, labels)
             # mega_loss_list.append(loss)
             print( f"Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item():.4f}")
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             train_loss += loss.item() * images.size(0)
 
@@ -112,15 +112,16 @@ LR = .0005
 def experiment():
     train_loader = get_dataloader(64,16,split='train')
     test_loader = get_dataloader(64,16,split='test')
-    model = make_UL(256,256,256,256,65,10,64,encoder_dim=128)
+    model = make_UL(128,128,256,256,65,10,64,encoder_dim=128,T=10)
+    assert(issubclass(model.__class__,nn.Module))
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"number of  params: {num_params}")
     # model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     # num_params: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print(f"number of default VIT params : {num_params}")
-
     optimizer = th.optim.Adam(model.parameters(), LR)
-    th.nn.utils.clip_grad_norm_(model.parameters(), 2, norm_type=2.0, error_if_nonfinite=False, foreach=None)
+    scheduler = th.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    th.nn.utils.clip_grad_norm_(model.parameters(), 1.5, norm_type=1.0, error_if_nonfinite=False, foreach=None)
     device = th.device("cuda:0" if th.cuda.is_available() else "cpu")
     train_loss_list, test_loss_list = train_and_eval(model,optimizer,device,train_loader,test_loader,10)
     plot_losses(train_loss_list,test_loss_list)
