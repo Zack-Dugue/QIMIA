@@ -6,6 +6,8 @@ import math
 import csv
 from utils import ScaledDotProduct, get_heads
 
+
+#replace this with torch text multi attention head thingy
 class LearnedQueryAttention(nn.Module):
     # assuming this shape for tokens:
       # batch - other dims - channels

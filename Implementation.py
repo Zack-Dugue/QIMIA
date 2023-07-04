@@ -9,7 +9,7 @@ import torchtext as tt
 tt.nn.ScaledDotProduct
 
 class EfficientLQA(nn.Module):
-    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, norm = 'pre',num_keys = None):
+    def __init__(self, key_dim, embed_dim, layer_num = None, softmax_affine= False, attn_bias=True, num_lqa_heads=None):
         """
         :param key_dim: the key dimension
         :param embed_dim: the value dimension
@@ -24,14 +24,23 @@ class EfficientLQA(nn.Module):
             # implement some way of inteligently selecting a reasonable
             # number of heads based on the key_dim
             num_lqa_heads = 4
-        if norm == 'pre':
-            self.norm = nn.LayerNorm(embed_dim)
-        else:
-            self.norm = nn.Identity()
-        self.num_lqa_heads = num_lqa_heads
-        self.QConv = nn.Conv1d(key_dim, num_lqa_heads,1, bias=False, groups=num_lqa_heads)
-        self.w0 = nn.Linear(embed_dim,embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
 
+        self.num_lqa_heads = num_lqa_heads
+
+        self.QConv = nn.Conv1d(key_dim, num_lqa_heads,1, bias=False, groups=num_lqa_heads)
+        self.QConv.weight = th.ones_like(self.QConv.weight)
+        self.w0 = nn.Linear(embed_dim, embed_dim)
+        self.w0.weight = nn.Parameter(th.eye(embed_dim, requires_grad=True))
+        self.w0.bias = nn.Parameter(th.zeros(embed_dim, requires_grad=True))
+        if attn_bias:
+            self.v_bias = nn.Parameter(th.zeros(embed_dim,requires_grad=True))
+            self.k_bias = nn.Parameter(th.randn(key_dim,requires_grad=True)/(key_dim**(.5)))
+        if softmax_affine:
+            self.softmax_affine = True
+            assert(layer_num is not None)
+            self.softmax_weight = nn.Parameter(th.ones([layer_num,num_lqa_heads],requires_grad=True))
+            self.softmax_bias = nn.Parameter(th.zeros([layer_num,num_lqa_heads],requires_grad=True))
 
     def multihead_reshape(self,x):
         clz = x.size()[-1]
@@ -64,14 +73,16 @@ class EfficientLQA(nn.Module):
         #dims of inputs: (batch, token, channel)
         A_w = self.QConv(keys)
         #Aw dims (batch, token, head)
+        if self.softmax_affine:
+            A_w = A_w * self.softmax_weight + self.softmax_bias
         A_w = th.permute(A_w,[0,2,1])
         A_w = th.flatten(A_w,0,1)
         V = self.multihead_reshape(values)
         A_w = A_w.repeat(1,1,self.values.size(-1))
         out = th.matmul(A_w, V)
         out = self.multihead_unshape(out)
-        out = self.norm(out)
         out = self.w0(out)
+        out = self.norm(out)
         return out
 
     def get_log(self):

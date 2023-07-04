@@ -2,13 +2,10 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchtext as tt
-import torchvision as tv
 from Implementation import LearnedQueryAttention
-from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
-from transformers import AutoTokenizer, PreTrainedTokenizer
-from Vision import FF_Block
+from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock , QIMIA_Sequential
+from ImageClassification.Vision_Models import FF_Block
 from utils import MultiheadAttentionContainer, fourier_encode
-import math
 import time
 
 

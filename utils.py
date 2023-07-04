@@ -13,7 +13,7 @@ def get_heads(key_dim,min_size=8):
     factor_list.sort()
     for factor in factor_list:
         if factor >= min_size:
-            return key_dim/factor
+            return int(key_dim/factor)
 #stolen from Torch Text
 class ScaledDotProduct(th.nn.Module):
     def __init__(self, dropout=0.0, batch_first=False) -> None:
@@ -259,6 +259,16 @@ def fourier_encode(x, max_freq, num_bands = 4):
     x = th.cat([x.sin(), x.cos()], dim = -1)
     x = th.cat((x, orig_x), dim = -1)
     return x
+
+class P_SIGLU(nn.Module):
+    def __init__(self,dim):
+        super(P_SIGLU, self).__init__()
+        self.sig_weight = nn.Parameter(th.ones(dim,requires_grad=True))
+        self.sig_bias = nn.Parameter(th.zeros(dim,requires_grad=True))
+        self.sigmoid = nn.Sigmoid()
+    def forward(self,x):
+        return self.sigmoid(x*self.sig_weight+self.sig_bias)*x
+
 
 if __name__ == '__main__':
     print(f"num heads 16 {get_heads(16,8)}")

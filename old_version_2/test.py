@@ -103,7 +103,7 @@ def experiment(iterations, key_dims, value_dims, input_dim=10, hidden_dim=20):
         optimizer.step()
     plt.plot(np.array(losses))
     plt.show()
-    model.get_logs(path = "logs")
+    model.get_logs(path ="../old_version/logs")
 
 if __name__ == "__main__":
     experiment(100000, 16, 16, 10, 10)

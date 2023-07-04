@@ -123,7 +123,7 @@ class AttentionBlock(BaseBlock):
     def block(self,A,num_input_tokens= None):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to" \
-                             "an attention layer for NLP QIMIA")
+                             "an attention layer for BERT_STYLE_NLP QIMIA")
         A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(1))
 
         o = self.attention(A,A,A)[0]

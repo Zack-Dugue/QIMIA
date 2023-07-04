@@ -50,7 +50,7 @@ class AttentionBlock(BaseBlock):
     def block(self,A,num_input_tokens= None, src_mask=None):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to" \
-                             "an attention layer for NLP QIMIA")
+                             "an attention layer for BERT_STYLE_NLP QIMIA")
         if src_mask is None:
             raise ValueError("Need to specify the causal mask")
         A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(1))
@@ -74,7 +74,7 @@ class OutputClassifierBlock(OutputBlock):
     def block(self, A,num_input_tokens=None):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to " \
-                             "an output layer for NLP QIMIA")
+                             "an output layer for BERT_STYLE_NLP QIMIA")
         A = A.view(A.size(0)//num_input_tokens, num_input_tokens, A.size(1))
         A = th.squeeze(F.avg_pool1d(th.permute(A,[0,2,1]), kernel_size=num_input_tokens, stride=1))
 
@@ -329,7 +329,7 @@ class TransformerBlock(BaseBlock):
     def block(self, A, num_input_tokens=None):
         if num_input_tokens == None:
             raise ValueError("Need to specify the numebr of tokens in the input to" \
-                             "an attention layer for NLP QIMIA")
+                             "an attention layer for BERT_STYLE_NLP QIMIA")
         A = A.view(A.size(0) // num_input_tokens, num_input_tokens, A.size(1))
         A = self.transformer(A)
         key = self.key_linear(A)
