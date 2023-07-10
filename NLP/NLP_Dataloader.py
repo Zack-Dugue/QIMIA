@@ -27,10 +27,10 @@ class GPT_MyWikiText(Dataset):
             if len(item) <= seq_length:
                 continue
             text = tokenizer(item)['input_ids']
-            for j in range(len(text)-seq_length):
-                assert(len(text[j:j+seq_length+1]) != 0)
-                self.data.append(text[j:j+seq_length+1])
-                print(f"\r i : {i} , j = {j}",end='')
+            num_elements = len(text)//(seq_length+1)
+            for element in range(num_elements):
+                self.data.append(text[element*seq_length: element*seq_length+seq_length+1])
+
     def gpt_it(self,data : th.Tensor):
         data = data.repeat([self.seq_length , 1, 1])
         return data
@@ -124,48 +124,29 @@ class GPT_TinyStories(Dataset):
         :param tokenizer:
         """
         #We need to open the data
-        print(f"Loading Tiny Stories data with split {split}")
-        print("Checking if this dataset has been created before:")
-        if os.path.isfile(path + f'/TinyStoriesV2-{split}-{seq_len}-{tokenizer.name_or_path}.pkl'):
-            print("This Dataset has been created before. Loading it from Pickle.")
-            self.data = pickle.load(open(path + f'/TinyStoriesV2-{split}-{seq_len}-{tokenizer.name_or_path}.pkl','rb'))
-            self.seq_len = seq_len
-            print("Finished")
-            return
-        print(f"Opening File")
-        file = open(path + f"/TinyStoriesV2-GPT4-{split}.txt",encoding="utf8")
-        print("Loading File to Ram")
-        text = file.readlines()
-        print("Merging Text")
-        text_list = []
-        current_story = ''
-        for i, sentence in enumerate(text):
-            print(f"\r merging line {i} of {len(text)}",end="")
-            if sentence == '<|endoftext|>\n':
-                text_list.append(current_story + tokenizer.eos_token)
-                current_story = ''
-            else:
-                current_story = current_story + sentence
-        print("\nTokenizing and Making Data Splits\n")
-        self.data = []
-        for j, text in enumerate(text_list):
-            tokenized_text = tokenizer(text)['input_ids']
-            for i in range(1,len(tokenized_text)-(seq_len+1)):
-                print(f"\r j : {j} of {len(text_list)} i : {i} of {len(tokenized_text)-(seq_len+1)}",end="")
-                self.data.append(tokenized_text[i:i+seq_len+1])
-        file.close()
-        if chache_this:
-            print("Saving this to make loading faster next time")
-            cache_file = open(path + f'/TinyStoriesV2-{split}-{seq_len}-{tokenizer.name_or_path}.pkl','xb')
-            pickle.dump(self.data,cache_file)
-            cache_file.close()
-        print("Finished")
-    def __getitem__(self, idx):
-        x = self.data[idx][0:-1]
-        y = self.data[idx][1:]
-        return x,y
-    def __len__(self):
-        return len(self.data)
+
+        print("loading has begun")
+        dataset = load_dataset("data/TinyStories")
+        dataset = dataset.data[split][0]
+        print(dataset)
+        self.tokenizer = tokenizer
+
+
+    def tokenize_map(self,element):
+        outputs = self.tokenizer(
+            element["text"],
+            truncation=True,
+            max_length=self.seq_len,
+            return_overflowing_tokens=True,
+            return_length=True,
+        )
+        input_batch = []
+        for length, input_ids in zip(outputs["length"], outputs["input_ids"]):
+            if length == self.seq_len:
+                input_batch.append(input_ids)
+        return {"input_ids": input_batch}
+
+
 
 def make_gpt_tinystories_dataloader(bsz,seq_len,tokenizer:PreTrainedTokenizer, val_split = .1):
     tokenizer.add_special_tokens({'eos_token':"<|endoftext|>"})
@@ -188,15 +169,4 @@ import datasets
 
 
 if __name__ == '__main__':
-    dataset = load_dataset("roneneldan/TinyStories")
-    data = datasets.Dataset()
-    data.map
-    tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-    tokenizer.add_special_tokens({'eos_token':"<|endoftext|>"})
-    # tokenizer.add_special_tokens()
-    dataset = GPT_TinyStories('data','train',64,tokenizer)
-
-    print(f"first text = {dataset[0]}")
-    print(f"first text decoded = {tokenizer.decode(dataset[0][0])}")
-
-
+    pass

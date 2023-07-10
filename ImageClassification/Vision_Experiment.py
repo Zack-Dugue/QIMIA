@@ -27,6 +27,7 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
+        print(f"\rtrain_loss : {loss}", end="")
         return loss
 
     def validation_step(self, batch,idx):
@@ -34,6 +35,8 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
+        print(f"\rvalidation_loss : {loss}", end="")
+
         return loss
 
     def test_step(self, batch,idx):
@@ -41,6 +44,8 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
+        print(f"\rtest_loss : {loss}", end="")
+
         return loss
 
     def configure_optimizers(self):
@@ -48,8 +53,8 @@ class Image_Classification_Module(pl.LightningModule):
 
 LR = .1
 def experiment():
-    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,64)
-    model = QIMIA_ViT(512,256,64,16,10,12,input_attention_heads =8 , FF_hidden_dim = 1024, output_hidden_dim=1024)
+    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,32)
+    model = QIMIA_ViT(128,64,64,16,10,12,input_attention_heads =8 , FF_hidden_dim = 1024, output_hidden_dim=1024)
     optimizer = th.optim.Adam(model.parameters(), LR)
     module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer)
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -57,7 +62,7 @@ def experiment():
     # model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     # num_params: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print(f"number of default VIT params : {num_params}")
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(detect_anomaly=False)
     trainer.fit(module,train_dataloaders=train_loader,val_dataloaders=val_loader)
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import torchtext as tt
 import torch as th
 import torch.nn as nn
-from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock, TransformBlock, QIMIA_Sequential
+from Implementation import BaseBlock, InitializerBlock, OutputBlock, TransformBlock, QIMIA_Sequential
 from utils import P_SIGLU
 import torch.nn.functional as F
 import math

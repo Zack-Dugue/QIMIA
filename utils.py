@@ -271,8 +271,4 @@ class P_SIGLU(nn.Module):
 
 
 if __name__ == '__main__':
-    print(f"num heads 16 {get_heads(16,8)}")
-    print(f"num heads 64 {get_heads(64,8)}")
-    print(f"num heads 128 {get_heads(128,8)}")
-    print(f"num heads 69 {get_heads(69,8)}")
-    print(f"num heads 124 {get_heads(124,8)}")
+    pass

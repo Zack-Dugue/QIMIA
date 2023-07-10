@@ -2,7 +2,7 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchtext as tt
-from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
+from Implementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
 from transformers import AutoTokenizer, PreTrainedTokenizer
 import math
 

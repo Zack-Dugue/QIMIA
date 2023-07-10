@@ -2,7 +2,7 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchvision as tv
-from FasterImplementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
+from Implementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
 from transformers import AutoTokenizer, PreTrainedTokenizer
 import math
 
@@ -15,7 +15,7 @@ def make_resnet_50(n_in_channels, n_outputs, image_size, pretrained=False):
 
 class VisionInitializer(InitializerBlock):
     def __init__(self,image_size, patch_size, embedding_dim, key_dim):
-        super(VisionInitializer, self).__init__()
+        super(VisionInitializer, self).__init__(output_depth=2)
 
         # If you write a flexible method to chop into patches, or write the EC conv method and pass
         #  the correct optional arument to Conv2d / Conv1d, you don't need to check this:
