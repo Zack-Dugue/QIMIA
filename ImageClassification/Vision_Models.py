@@ -138,7 +138,7 @@ class VisionOutput(OutputBlock):
 
 
 class QIMIA_ViT(nn.Module):
-    def __init__(self,key_dim,embed_dim, image_size, patch_size, n_outputs, num_layers, input_attention_heads = 8, FF_hidden_dim=1024,output_hidden_dim = 2048):
+    def __init__(self,key_dim,embed_dim, image_size, patch_size, n_outputs, num_layers, input_attention_heads = 12, FF_hidden_dim=1024,output_hidden_dim = 2048):
         super().__init__()
         blocks = [VisionInitializer(image_size, patch_size, embed_dim, key_dim)]
         for i in range(num_layers):
@@ -160,3 +160,4 @@ class QIMIA_ViT(nn.Module):
             else:
                 kwarg_list.append({})
         return self.model(x,aux_list = kwarg_list)
+

@@ -150,13 +150,12 @@ class LearnedQueryAttention(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
         self.n_heads = n_heads
-        self.QConv = nn.Conv1d(key_dim, n_heads,1, bias=False, groups=n_heads)
-        self.QConv.weight = nn.Parameter(th.ones_like(self.QConv.weight,requires_grad=True))
         if layer_num is not None:
-            self.QConv.weight = th.ones_like(self.QConv.weight)*layer_num
-        self.w0 = nn.Linear(embed_dim, embed_dim)
-        self.w0.weight = nn.Parameter(th.eye(embed_dim, requires_grad=True))
-        self.w0.bias = nn.Parameter(th.zeros(embed_dim, requires_grad=True))
+            self.query = nn.Parameter(th.ones([self.n_heads, 1, key_dim // self.n_heads],requires_grad=True)*layer_num)
+        else:
+            self.query = nn.Parameter(th.zeros([self.n_heads, 1, key_dim // self.n_heads],requires_grad=True))
+
+
         self.attn_bias = attn_bias
 
         if attn_bias:
@@ -173,7 +172,7 @@ class LearnedQueryAttention(nn.Module):
         self.softmax_affine = True
         self.softmax_weight = nn.Parameter(th.ones([self.n_heads,layer_num + self.attn_bias], requires_grad=True))
         self.softmax_bias = nn.Parameter(th.zeros([self.n_heads,layer_num + self.attn_bias], requires_grad=True))
-        self.QConv.weight = nn.Parameter(th.ones_like(self.QConv.weight,requires_grad=True)*layer_num)
+        # self.query = nn.Parameter(th.ones_like(self.query,requires_grad=True)*layer_num)
 
     def multihead_reshape(self,x):
         clz = x.size()[-1]
@@ -210,21 +209,21 @@ class LearnedQueryAttention(nn.Module):
             # of the keys.
             # TODO fix this at some point.
             keys = keys*1
+        Q = self.query.repeat([keys.size(0),1,1])
+        K = self.multihead_reshape(keys)
 
-        keys = th.permute(keys,[0,2,1])
-
-        A_w = self.QConv(keys)
+        A_w = th.bmm(Q,th.permute(K,[0,2,1]))
 
         #Aw dims (batch, token, head)
-        if self.softmax_affine:
-            A_w = A_w * self.softmax_weight + self.softmax_bias
+        # if self.softmax_affine:
+        #     A_w = A_w * self.softmax_weight + self.softmax_bias
         A_w = F.softmax(A_w,2)
         A_w = th.flatten(A_w,0,1)
         A_w = th.unsqueeze(A_w,1)
         V = self.multihead_reshape(values)
         A = th.matmul(A_w,V)
         A = self.multihead_unshape(A)
-        A = self.w0(A)
+        # A = self.w0(A)
         A = self.norm(A)
         return A
 
@@ -234,7 +233,7 @@ class LearnedQueryAttention(nn.Module):
 
 #TODO switch everything from batch first to putting the sequences dimension first.
 class BaseBlock(nn.Module):
-    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, attn_bias=False,softmax_affine=False):
+    def __init__(self, key_dim, embed_dim, num_lqa_heads=None, attn_bias=True,softmax_affine=False):
         """
         :param key_dim: the key dimension
         :param embed_dim: the value dimension
@@ -329,7 +328,7 @@ class TransformBlock(nn.Module):
         return keys,values
 
 class OutputBlock(nn.Module):
-    def __init__(self, key_dim, embed_dim, num_lqa_heads=None,softmax_affine = False, attn_bias=False, diagnostic=False):
+    def __init__(self, key_dim, embed_dim, num_lqa_heads=None,softmax_affine = False, attn_bias=True, diagnostic=False):
         super(OutputBlock, self).__init__()
         if num_lqa_heads == None:
             # implement some way of inteligently selecting a reasonable
@@ -351,7 +350,7 @@ class OutputBlock(nn.Module):
         return output
 
 class QIMIA_Sequential(nn.Module):
-    def __init__(self,blocks, set_up_softmax_affine = False):
+    def __init__(self,blocks, set_up_softmax_affine = True):
         super().__init__()
         assert(type(blocks) == list or type(blocks) == nn.ModuleList
                or issubclass(blocks,nn.ModuleList))

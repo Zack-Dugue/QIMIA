@@ -56,7 +56,6 @@ class GPT_NLP_module(pl.LightningModule):
         text = self.tokenizer.batch_decode(text)
 
         return text
-
     def on_validation_epoch_end(self):
         text = self.generate(300)
         new_text = ""
@@ -132,6 +131,8 @@ def MLM_experiment():
     my_trainer = pl.Trainer()
     train_dataloader, validation_dataloader , test_dataloader = make_gpt_tinystories_dataloader(BSZ,SEQ_LEN, AutoTokenizer.from_pretrained('bert-base-uncased'))
     my_trainer.fit(module,train_dataloader,validation_dataloader)
+
+
 
 
 if __name__ == '__main__':
