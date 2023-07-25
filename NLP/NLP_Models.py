@@ -65,6 +65,7 @@ class AttentionBlock(BaseBlock):
         self.Lkey = nn.Linear(embed_dim,key_dim)
         self.value_act = P_SIGLU(embed_dim)
         self.Lvalue = nn.Linear(embed_dim,embed_dim)
+        self.causal = causal
 
     def set_causal(self,causal : bool):
         self.causal = causal
