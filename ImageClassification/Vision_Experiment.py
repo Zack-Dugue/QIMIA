@@ -5,7 +5,7 @@ import torch.nn.functional  as F
 from Vision_Models import QIMIA_ViT
 import argparse
 
-from Vision_Dataloders import get_CIFAR10_dataloader
+from Vision_Dataloders import get_CIFAR10_dataloader, get_imageNet_dataloader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
@@ -62,7 +62,7 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     # profiler = PyTorchProfiler(dirpath=path, filename='perf-logs')
     profiler = None
     logger = TensorBoardLogger(os.path.join(path, 'tb_logs'), name=model_name)
-    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,batch_size,num_dataloaders=num_dataloaders)
+    train_loader, val_loader, test_loader = get_imageNet_dataloader(64,batch_size,num_dataloaders=num_dataloaders)
     model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
     optimizer = th.optim.Adam(model.parameters(), learning_rate)
     module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer)
@@ -77,7 +77,9 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     print(f"\t trainer.num_nodes : {trainer.num_nodes}")
     print(f"\t trainer.accelerator : {trainer.accelerator}")
     print(f"\t trainer.device_ids {trainer.device_ids}")
+    print(f"\t trainer.strategy : {trainer.strategy}")
     print(f"\t train_loader.num_workers : {train_loader.num_workers}")
+
     # model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     # num_params: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print(f"number of default VIT params : {num_params}")
