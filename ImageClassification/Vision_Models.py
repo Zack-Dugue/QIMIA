@@ -2,6 +2,13 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 import torchvision as tv
+
+import sys
+
+# setting path
+sys.path.append('..')
+
+# setting path
 from Implementation import BaseBlock, InitializerBlock, OutputBlock , TransformBlock, QIMIA_Sequential
 from transformers import AutoTokenizer, PreTrainedTokenizer
 import math

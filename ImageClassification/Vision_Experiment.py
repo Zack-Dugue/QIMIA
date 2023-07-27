@@ -47,20 +47,22 @@ class Image_Classification_Module(pl.LightningModule):
         return self.optimizer
 
 LR = .1
-def experiment(path, model_name, num_nodes, num_dataloaders, batch_size, learning_rate, num_epochs, gpus):
+def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, learning_rate, num_epochs, gpus):
     if gpus == 0:
-        accelerator = "auto"
+        accelerator = "cpu"
         devices = "auto"
     else:
         accelerator = "cuda"
         devices = gpus
-
-    strategy = pl.strategies.DDPStrategy(static_graph=True)
+    if gpus > 1:
+        strategy = pl.strategies.DDPStrategy(static_graph=True)
+    else:
+        strategy = "auto"
     # strategy = "auto"
     # profiler = PyTorchProfiler(dirpath=path, filename='perf-logs')
     profiler = None
     logger = TensorBoardLogger(os.path.join(path, 'tb_logs'), name=model_name)
-    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,batch_size)
+    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,batch_size,num_dataloaders=num_dataloaders)
     model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
     optimizer = th.optim.Adam(model.parameters(), learning_rate)
     module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer)
