@@ -6,133 +6,9 @@ import math
 import csv
 from utils import ScaledDotProduct, get_heads
 
-#
-# #replace this with torch text multi attention head thingy
-# class LearnedQueryAttention(nn.Module):
-#     # assuming this shape for tokens:
-#       # batch - other dims - channels
-#     def __init__(self, k_dim, v_dim, n_heads, layer_num = None, softmax_affine= False, attn_bias=True):
-#         """
-#         :param k_dim:
-#         :param n_heads:
-#         :param v_dim:
-#         :param w0:
-#         :param norm_query:
-#         :param end_norm:
-#         :param attention:
-#         :param diagnostic:
-#         """
-#         super(LearnedQueryAttention, self).__init__()
-#         # self.log = log
-#         # self.q = nn.Parameter(th.ones(k_dim,requires_grad=True)/th.linalg.norm(th.ones(k_dim)))
-#         self.q = nn.Parameter(th.zeros(k_dim,requires_grad=True))
-#         assert(k_dim % n_heads == 0)
-#         assert(v_dim is not None)
-#         self.w0 = nn.Linear(v_dim,v_dim)
-#         self.w0.weight = nn.Parameter(th.eye(v_dim,requires_grad=True))
-#         self.w0.bias = nn.Parameter(th.zeros(v_dim,requires_grad=True))
-#
-#         self.attention = ScaledDotProduct(batch_first = True)
-#
-#         self.n_heads = n_heads
-#         self.end_norm = nn.LayerNorm(v_dim)
-#
-#         self.attn_bias = attn_bias
-#         if attn_bias:
-#             self.v_bias = nn.Parameter(th.zeros(v_dim,requires_grad=True))
-#             self.k_bias = nn.Parameter(th.zeros(k_dim,requires_grad=True))
-#         else:
-#             self.v_bias = None
-#             self.k_bias = None
-#         #
-#         # self.log = log
-#         # if log:
-#         #     self.Slog = []
-#         #     self.Rlog = []
-#         #     self.A_wlog =[]
-#         #     self.norm_qlog = []
-#         #     self.norm_Alog = []
-#         # self.print_log = print_log
-#
-#     def multihead_reshape(self,x):
-#         clz = x.size()[-1]
-#         assert(clz % self.n_heads == 0)
-#         bsz = x.size()[0]
-#         new_shape = list(x.size())
-#         new_shape[0] = bsz * self.n_heads
-#         new_shape[-1] = clz // self.n_heads
-#         x = x.contiguous().view(new_shape)
-#         return x
-#
-#     def multihead_unshape(self,x):
-#         clz = x.size()[-1]
-#         bsz = x.size()[0]
-#         new_shape = list(x.size())
-#         new_shape[0] = bsz // self.n_heads
-#         new_shape[-1] = clz * self.n_heads
-#         x = x.view(new_shape)
-#         return x
-#
-#
-#     def forward(self, keys,values):
-#         K , V = keys,values
-#         Q = self.q
-#         # Q = self.q.repeat(K.size())
-#         if self.attn_bias:
-#             v_bias = self.multihead_reshape(self.v_bias.expand([V.size(0) , 1 , V.size(2)]))
-#             k_bias = self.multihead_reshape(self.k_bias.expand([K.size(0) , 1 , K.size(2)]))
-#             bias_k = th.permute(k_bias,[1,0,2])
-#             bias_v = th.permute(v_bias,[1,0,2])
-#         else:
-#             bias_k = None
-#             bias_v = None
-#         Q = self.multihead_reshape(Q.expand([K.size(0) , 1 , K.size(2)]))
-#         K = self.multihead_reshape(K)
-#         V = self.multihead_reshape(V)
-#         A, A_w = self.attention(Q, K, V,bias_k = bias_k, bias_v = bias_v)
-#
-#
-#
-#         A = self.multihead_unshape(A)
-#
-#         A = self.w0(A)
-#         A = self.end_norm(A)
-#         # A = th.sum(values, dim=1,keepdim=True)
-#
-#         return A
-#
-#     def diagnostic_run(self,A,A_w):
-#         """
-#         Performs a diagnostic analysis of the run and saves it to a buffer.
-#         :param A: the actual output of the LQA after the multihead unshape
-#         :param A_w: attention weights of the shape [Num_Heads * Bsz,NumLayers,1]
-#         :return:
-#         """
-#         A_w = th.squeeze(A_w)
-#         if len(A_w.size()) == 1:
-#             A_w = th.unsqueeze(A_w,1)
-#         num_layers = A_w.size(1)
-#         S = th.mean(th.sum(-th.log(A_w)*A_w,dim=1),dim=0)/math.log(num_layers)
-#         norm_q = th.linalg.norm(self.q)
-#         variance_q = th.var(self.q,0)
-#         norm_A = th.mean(th.linalg.norm(A))
-#         u = th.mean(A,0)
-#         u = u.expand(A.size())
-#         R = th.mean(th.norm(A-u)**2)
-#         # print(f"S = {S} , R = {R} , A_w= {th.mean(A_w,0)},  norm_q = {norm_q} , norm_A = {norm_A}")
-#         # print(f"Q = {self.q}")
-#         if self.print_log:
-#             print(f" A_w= {th.mean(A_w,0)}, norm_q = {norm_q}, variance_q = {variance_q}")
-#         self.Slog.append(float(th.nan_to_num(S)))
-#         self.Rlog.append(float(R))
-#         self.A_wlog.append(th.mean(A_w,0).tolist())
-#         self.norm_qlog.append(float(norm_q))
-#         self.norm_Alog.append(float(norm_A))
-#     def get_log(self):
-#         return {"S value" : self.Slog, "R value" : self.Rlog, "attn weight" : self.A_wlog, "Norm of Query" : self.norm_qlog, "Norm of Output Attention" :  self.norm_Alog}
 
 class LearnedQueryAttention(nn.Module):
-    def __init__(self, key_dim, embed_dim, n_heads, layer_num = None, softmax_affine= False, attn_bias=True):
+    def __init__(self, key_dim, embed_dim, n_heads, layer_num = None, softmax_affine= False, attn_bias=True, log = True):
         """
         :param key_dim: the key dimension
         :param embed_dim: the value dimension
@@ -147,6 +23,7 @@ class LearnedQueryAttention(nn.Module):
             # implement some way of inteligently selecting a reasonable
             # number of heads based on the key_dim
             n_heads = 4
+        self.log = log
         self.norm = nn.LayerNorm(embed_dim)
 
         self.n_heads = n_heads
@@ -165,13 +42,13 @@ class LearnedQueryAttention(nn.Module):
         if softmax_affine:
             self.softmax_affine = True
             assert(layer_num is not None)
-            self.softmax_weight = nn.Parameter(th.ones([layer_num+attn_bias,n_heads],requires_grad=True))
-            self.softmax_bias = nn.Parameter(th.zeros([layer_num+attn_bias,n_heads],requires_grad=True))
+            self.softmax_weight = nn.Parameter(th.ones([n_heads,1,layer_num+attn_bias],requires_grad=True))
+            self.softmax_bias = nn.Parameter(th.zeros([n_heads,1,layer_num+attn_bias],requires_grad=True))
 
     def instantiate_softmax_affine(self, layer_num):
         self.softmax_affine = True
-        self.softmax_weight = nn.Parameter(th.ones([self.n_heads,layer_num + self.attn_bias], requires_grad=True))
-        self.softmax_bias = nn.Parameter(th.zeros([self.n_heads,layer_num + self.attn_bias], requires_grad=True))
+        self.softmax_weight = nn.Parameter(th.ones([self.n_heads,1,layer_num + self.attn_bias], requires_grad=True))
+        self.softmax_bias = nn.Parameter(th.zeros([self.n_heads,1,layer_num + self.attn_bias], requires_grad=True))
         # self.query = nn.Parameter(th.ones_like(self.query,requires_grad=True)*layer_num)
 
     def multihead_reshape(self,x):
@@ -215,8 +92,8 @@ class LearnedQueryAttention(nn.Module):
         A_w = th.bmm(Q,th.permute(K,[0,2,1]))
 
         #Aw dims (batch, token, head)
-        # if self.softmax_affine:
-        #     A_w = A_w * self.softmax_weight + self.softmax_bias
+        if self.softmax_affine:
+            A_w = A_w * self.softmax_weight.repeat([keys.size(0),1,1]) + self.softmax_bias.repeat([keys.size(0),1,1])
         A_w = F.softmax(A_w,2)
         A_w = th.flatten(A_w,0,1)
         A_w = th.unsqueeze(A_w,1)
@@ -224,11 +101,21 @@ class LearnedQueryAttention(nn.Module):
         A = th.matmul(A_w,V)
         A = self.multihead_unshape(A)
         # A = self.w0(A)
+        if self.log:
+            self.compute_log(A_w,A)
+
         A = self.norm(A)
+
         return A
+    def compute_log(self,A_w,A):
+        with th.no_grad():
+            self.H = th.mean(th.sum(A_w*th.log(A_w),2))/math.log(A_w.size(2))
+            self.R = th.mean(A)
+            self.S = th.mean(th.var(A,dim=0))
+            self.q_norm = th.linalg.vector_norm(th.flatten(self.query))
 
     def get_log(self):
-        return None
+        return {'H':self.H, 'R':self.R, 'S':self.S, 'q_norm':self.q_norm}
 
 
 #TODO switch everything from batch first to putting the sequences dimension first.
@@ -421,40 +308,20 @@ class QIMIA_Sequential(nn.Module):
     def __len__(self):
         return len(self.blocks)
 
-    def get_logs(self,path = None):
-        logs_dict = {}
+    def get_logs(self, avg_logs = True):
+        logs_dict = {'H' : 0 , 'R' : 0 , 'S' : 0 , 'q_norm' : 0}
         for i, block in enumerate(self.blocks):
             if issubclass(block.__class__,OutputBlock) or issubclass(block.__class__,BaseBlock):
                 logs = block.LQA.get_log()
-                logs_dict.update({f"block_{i}":logs})
-        if path == None:
-            return logs_dict
-        else:
-            for (name,block_log) in logs_dict.items():
-                f = open(path + "/" + name + ".csv", "w",newline='')
-                writer = csv.writer(f)
-                keys = list(block_log.keys())
-                new_keys = []
-                for key in keys:
-                   if list ==type(block_log[key][0]):
-                       for i in range(len(block_log[key][0])):
-                        new_keys.append(f"{key}_{i}")
-                   else:
-                       new_keys.append(key)
-                writer.writerow(new_keys)
-                log_this = [[list(block_log.values())[j][i] for j in range(len(list(block_log.values())))] for i in range(len(list(block_log.values())[0]))]
-                new_log_this = []
-                for row in log_this:
-                    row_list = []
-                    for element in row:
-                        if list == type(element):
-                            for i in range(len(element)):
-                                row_list.append(element[i])
-                        else:
-                            row_list.append(element)
-                    new_log_this.append(row_list)
-                writer.writerows(new_log_this)
-        print("Done Logging")
+                logs_dict['H'] += logs['H']
+                logs_dict['R'] += logs['R']
+                logs_dict['S'] += logs['S']
+                logs_dict['q_norm'] += logs['q_norm']
+        logs_dict['H'] /= len(self.blocks)
+        return logs_dict
+
+
+
 
 
 

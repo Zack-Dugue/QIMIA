@@ -159,6 +159,8 @@ class QIMIA_ViT(nn.Module):
     def parameters(self):
         params = self.model.parameters()
         return self.model.parameters()
+    def get_logs(self):
+        return self.model.get_logs()
     def forward(self,x):
         kwarg_list = []
         for i in range(len(self.model)):

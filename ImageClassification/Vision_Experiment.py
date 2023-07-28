@@ -4,25 +4,34 @@ import torch.nn.functional  as F
 
 from Vision_Models import QIMIA_ViT
 import argparse
-
-from Vision_Dataloders import get_CIFAR10_dataloader, get_imageNet_dataloader
+import datasets
+from Vision_Dataloders import get_CIFAR10_dataloader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
 
 class Image_Classification_Module(pl.LightningModule):
-    def __init__(self,model,loss_fun,optimizer):
+    def __init__(self,model,loss_fun,optimizer, QIMIA_log = False):
         super().__init__()
         self.model = model
         self.loss_fun = loss_fun
         self.optimizer = optimizer
+        self.QIMIA_log = QIMIA_log
 
     def training_step(self,batch,idx):
         x, y = batch
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
+        if self.QIMIA_log:
+            logs = self.model.get_logs()
+            self.log('H' , logs['H'])
+            self.log('R' , logs['R'])
+            self.log('S' , logs['S'])
+            self.log('q_norm', logs['q_norm'])
         print(f"\rtrain_loss : {loss}", end="")
+        self.log("train_loss", loss)
+
         return loss
 
     def validation_step(self, batch,idx):
@@ -31,6 +40,7 @@ class Image_Classification_Module(pl.LightningModule):
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
         print(f"\rvalidation_loss : {loss}", end="")
+        self.log("validation_loss", loss)
 
         return loss
 
@@ -40,6 +50,7 @@ class Image_Classification_Module(pl.LightningModule):
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
         print(f"\rtest_loss : {loss}", end="")
+        self.log("test_loss", loss)
 
         return loss
 
@@ -61,17 +72,26 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     # strategy = "auto"
     # profiler = PyTorchProfiler(dirpath=path, filename='perf-logs')
     profiler = None
+    print("Initializing Logger")
     logger = TensorBoardLogger(os.path.join(path, 'tb_logs'), name=model_name)
-    train_loader, val_loader, test_loader = get_imageNet_dataloader(64,batch_size,num_dataloaders=num_dataloaders)
-    model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
-    optimizer = th.optim.Adam(model.parameters(), learning_rate)
-    module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer)
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("Initializing Dataloaders")
+    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,batch_size,num_dataloader_workers=num_dataloader_workers)
+    print(f"length of dataloader: {len(train_loader)}")
+    print("Initializing Model")
+    # model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
+    model = QIMIA_ViT(256,256,64,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
 
+    print(f"Model Num Parameters: {model.parameters()}")
+    print(f"Memory left after model initialization : {th.cuda.is_available()}")
+    print("initializing optimizer")
+    optimizer = th.optim.Adam(model.parameters(), learning_rate)
+    print("initializng image classification module")
+    module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer,QIMIA_log=True)
+    print("initializing trainer")
     trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=num_epochs, strategy=strategy,
                          num_nodes=num_nodes, log_every_n_steps=50, default_root_dir=path, profiler=profiler,
                          logger=logger)
-    print(f"Number of model params: {num_params}")
+
     print("Trainer system parameters:")
     print(f"\t trainer.world_size : {trainer.world_size}")
     print(f"\t trainer.num_nodes : {trainer.num_nodes}")
@@ -83,6 +103,7 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     # model = tv.models.VisionTransformer(64,16,12,12,768,3072)
     # num_params: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print(f"number of default VIT params : {num_params}")
+    print("begin training")
     trainer.fit(module,train_dataloaders=train_loader,val_dataloaders=val_loader)
 
 
