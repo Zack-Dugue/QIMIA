@@ -37,23 +37,23 @@ PATH = "./ImageNetData"
 def get_imageNet_dataloader(image_size, batch_size,num_dataloader_workers=0):
 
     train_transform = transforms.Compose([
-        transforms.Resize(image_size),
+        transforms.Resize((image_size,image_size)),
+        transforms.AutoAugment(interpolation = transforms.InterpolationMode.BILINEAR),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406) , (0.229, 0.224, 0.225)),
-        transforms.AutoAugment(InterpolationMode = transforms.InterpolationMode.BILINEAR)
     ])
 
     val_transform = transforms.Compose([
-        transforms.Resize(image_size),
+        transforms.Resize((image_size,image_size)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
     # Load data
     train_dataset = datasets.ImageNet(root=PATH, split="train",transform=train_transform)
-    val_dataset = datasets.ImageNet(root=PATH, split="valid",transform=val_transform)
-    test_dataset = datasets.ImageNet(root=PATH,split="valid",transform=val_transform)
-
+    val_dataset = datasets.ImageNet(root=PATH, split="val",transform=val_transform)
+    test_dataset = datasets.ImageNet(root=PATH,split="val",transform=val_transform)
+    print(f"length of train_dataset is {len(train_dataset)}")
 # Package it up in batches
     train_dataloader = data_utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True,num_workers=num_dataloader_workers,pin_memory=True)
     val_dataloader = data_utils.DataLoader(val_dataset, batch_size=batch_size, shuffle=False,num_workers=num_dataloader_workers,pin_memory=True)
