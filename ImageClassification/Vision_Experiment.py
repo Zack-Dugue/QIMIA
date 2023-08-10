@@ -31,16 +31,16 @@ class Image_Classification_Module(pl.LightningModule):
         accuracy = (predicted == y).sum() / x.size(0)
         if self.QIMIA_log:
             logs = self.model.get_logs()
-            self.log('H' , logs['H'])
-            self.log('R' , logs['R'])
-            self.log('S' , logs['S'])
-            self.log('q_norm', logs['q_norm'])
+            self.log('H' , logs['H'],sync_dist=True)
+            self.log('R' , logs['R'],sync_dist=True)
+            self.log('S' , logs['S'],sync_dist=True)
+            self.log('q_norm', logs['q_norm'],sync_dist=True)
             print(f"\r training: idx = {idx} =  loss = {loss}, accuracy = {accuracy} 'H' = {logs['H']}, 'R' = {logs['R']} , 'S' = {logs['S']}, 'q_norm' = {logs['q_norm']}" , end="")
         else:
             print(f"\r training: idx = {idx} =  loss = {loss}, accuracy = {accuracy}" , end="")
 
-        self.log("train_loss", loss)
-        self.log("train_accuracy", accuracy)
+        self.log("train_loss", loss,sync_dist=True)
+        self.log("train_accuracy", accuracy,sync_dist=True)
         return loss
 
     def validation_step(self, batch,idx):
@@ -48,7 +48,7 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
-        print(f"\r validation_loss : {loss}", end="")
+        print(f"\r Validation idx = {idx}, loss : {loss}", end="")
         _, predicted = th.max(logits.data, 1)
         accuracy = (predicted == y).sum() / x.size(0)
         self.validation_loss.append(loss)
@@ -68,8 +68,8 @@ class Image_Classification_Module(pl.LightningModule):
         val_loss = sum(self.validation_loss) / len(self.validation_loss)
         val_accuracy = sum(self.validation_accuracy) / len(self.validation_accuracy)
 
-        self.log("val_loss", val_loss)
-        self.log("val_accuracy", val_accuracy)
+        self.log("val_loss", val_loss,sync_dist=True)
+        self.log("val_accuracy", val_accuracy,sync_dist=True)
         print(f"val_loss = {val_loss} , val_accuracy = {val_accuracy} \n")
         self.validation_loss = []
         self.validation_accuracy = []
