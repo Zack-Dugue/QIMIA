@@ -2,36 +2,45 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 
-from Vision_Models import QIMIA_ViT
+from Vision_Models import QIMIA_ViT , TinyModel
 import argparse
 import datasets
-from Vision_Dataloders import get_CIFAR10_dataloader
+from Vision_Dataloders import get_CIFAR10_dataloader , get_imageNet_dataloader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
 
 class Image_Classification_Module(pl.LightningModule):
-    def __init__(self,model,loss_fun,optimizer, QIMIA_log = False):
+    def __init__(self,model,loss_fun,optimizer, QIMIA_log = True):
         super().__init__()
         self.model = model
         self.loss_fun = loss_fun
         self.optimizer = optimizer
+        # self.scheduler = th.optim.lr_scheduler.ExponentialLR(optimizer, .9)
+
         self.QIMIA_log = QIMIA_log
+        self.validation_loss = []
+        self.validation_accuracy = []
+
 
     def training_step(self,batch,idx):
         x, y = batch
         logits = self.model(x)
-        # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
+        _, predicted = th.max(logits.data, 1)
+        accuracy = (predicted == y).sum() / x.size(0)
         if self.QIMIA_log:
             logs = self.model.get_logs()
             self.log('H' , logs['H'])
             self.log('R' , logs['R'])
             self.log('S' , logs['S'])
             self.log('q_norm', logs['q_norm'])
-        print(f"\rtrain_loss : {loss}", end="")
-        self.log("train_loss", loss)
+            print(f"\r training: idx = {idx} =  loss = {loss}, accuracy = {accuracy} 'H' = {logs['H']}, 'R' = {logs['R']} , 'S' = {logs['S']}, 'q_norm' = {logs['q_norm']}" , end="")
+        else:
+            print(f"\r training: idx = {idx} =  loss = {loss}, accuracy = {accuracy}" , end="")
 
+        self.log("train_loss", loss)
+        self.log("train_accuracy", accuracy)
         return loss
 
     def validation_step(self, batch,idx):
@@ -39,9 +48,11 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
-        print(f"\rvalidation_loss : {loss}", end="")
-        self.log("validation_loss", loss)
-
+        print(f"\r validation_loss : {loss}", end="")
+        _, predicted = th.max(logits.data, 1)
+        accuracy = (predicted == y).sum() / x.size(0)
+        self.validation_loss.append(loss)
+        self.validation_accuracy.append(accuracy)
         return loss
 
     def test_step(self, batch,idx):
@@ -49,10 +60,20 @@ class Image_Classification_Module(pl.LightningModule):
         logits = self.model(x)
         # y = F.one_hot(y, VOCAB_SIZE).float()
         loss = self.loss_fun(logits, y)
-        print(f"\rtest_loss : {loss}", end="")
+        print(f"\r test_loss : {loss}", end="")
         self.log("test_loss", loss)
 
         return loss
+    def on_validation_epoch_end(self):
+        val_loss = sum(self.validation_loss) / len(self.validation_loss)
+        val_accuracy = sum(self.validation_accuracy) / len(self.validation_accuracy)
+
+        self.log("val_loss", val_loss)
+        self.log("val_accuracy", val_accuracy)
+        print(f"val_loss = {val_loss} , val_accuracy = {val_accuracy} \n")
+        self.validation_loss = []
+        self.validation_accuracy = []
+        # self.scheduler.step()
 
     def configure_optimizers(self):
         return self.optimizer
@@ -73,23 +94,23 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     # profiler = PyTorchProfiler(dirpath=path, filename='perf-logs')
     profiler = None
     print("Initializing Logger")
-    logger = TensorBoardLogger(os.path.join(path, 'tb_logs'), name=model_name)
+    logger = TensorBoardLogger('tb_logs', name=model_name)
     print("Initializing Dataloaders")
-    train_loader, val_loader, test_loader = get_CIFAR10_dataloader(64,batch_size,num_dataloader_workers=num_dataloader_workers)
+    train_loader, val_loader, test_loader = get_imageNet_dataloader(224,batch_size,num_dataloader_workers=num_dataloader_workers)
     print(f"length of dataloader: {len(train_loader)}")
     print("Initializing Model")
     # model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
-    model = QIMIA_ViT(256,256,64,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
-
+    # model = QIMIA_ViT(256,256,64,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
+    model = TinyModel()
     print(f"Model Num Parameters: {model.parameters()}")
-    print(f"Memory left after model initialization : {th.cuda.is_available()}")
+    print(f"Memory left after model initialization : {th.cuda.max_memory_allocated() }")
     print("initializing optimizer")
     optimizer = th.optim.Adam(model.parameters(), learning_rate)
     print("initializng image classification module")
     module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer,QIMIA_log=True)
     print("initializing trainer")
     trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=num_epochs, strategy=strategy,
-                         num_nodes=num_nodes, log_every_n_steps=50, default_root_dir=path, profiler=profiler,
+                         num_nodes=num_nodes, default_root_dir=path, profiler=profiler,
                          logger=logger)
 
     print("Trainer system parameters:")
@@ -123,7 +144,6 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=20, type=int)
     parser.add_argument('-g', '--num_gpus', help='Number of gpus per node', default=0, type=int)
     args = parser.parse_args()
-
     path = os.path.join(os.getcwd(), 'experiments', args.path)
     model_name = args.name
     num_nodes = args.num_nodes
