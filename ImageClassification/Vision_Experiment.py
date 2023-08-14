@@ -2,9 +2,8 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 
-from Vision_Models import QIMIA_ViT , TinyModel
+from Vision_Models import QIMIA_ViT
 import argparse
-import datasets
 from Vision_Dataloders import get_CIFAR10_dataloader , get_imageNet_dataloader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
