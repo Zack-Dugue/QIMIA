@@ -2,7 +2,7 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional  as F
 
-from Vision_Models import QIMIA_ViT
+from Vision_Models import QIMIA_ViT,make_resnet_50
 import argparse
 from Vision_Dataloders import get_CIFAR10_dataloader , get_imageNet_dataloader
 import pytorch_lightning as pl
@@ -100,13 +100,14 @@ def experiment(path, model_name, num_nodes, num_dataloader_workers, batch_size, 
     print("Initializing Model")
     # model = QIMIA_ViT(768,768,224,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=3072)
     # model = QIMIA_ViT(256,256,64,16,1000,12,input_attention_heads =8 , FF_hidden_dim = 3072, output_hidden_dim=
-    model = QIMIA_ViT(512, 512, 224, 16, 1000, 12, input_attention_heads=8, FF_hidden_dim=2048, output_hidden_dim=2048)
+    # model = QIMIA_ViT(512, 512, 224, 16, 1000, 12, input_attention_heads=8, FF_hidden_dim=2048, output_hidden_dim=2048)
+    model = make_resnet_50()
     print(f"Model Num Parameters: {model.parameters()}")
     print(f"Memory left after model initialization : {th.cuda.max_memory_allocated() }")
     print("initializing optimizer")
     optimizer = th.optim.Adam(model.parameters(), learning_rate)
     print("initializng image classification module")
-    module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer,QIMIA_log=True)
+    module = Image_Classification_Module(model,nn.CrossEntropyLoss(),optimizer=optimizer,QIMIA_log=False)
     print("initializing trainer")
     trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=num_epochs, strategy=strategy,
                          num_nodes=num_nodes, default_root_dir=path, profiler=profiler,

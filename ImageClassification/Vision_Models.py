@@ -15,9 +15,37 @@ import math
 
 
 
-def make_resnet_50(n_in_channels, n_outputs, image_size, pretrained=False):
+class TinyModel(nn.Module):
+    def __init__(self):
+        super(TinyModel, self).__init__()
+        self.conv1 = nn.Conv2d(3,16,3,padding=1,stride=2)
+        self.act1 = nn.ReLU()
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16,32,3,padding=1,stride=2)
+        self.act2 = nn.ReLU()
+        self.bn2 = nn.BatchNorm2d(32)
+        self.fc1 = nn.Linear(32,64)
+        self.act3 = nn.ReLU()
+        self.fc2 = nn.Linear(64,10)
+    def forward(self,x):
+        x = self.conv1(x)
+        x = self.act1(x)
+        x = self.bn1(x)
+        x = self.conv2(x)
+        x = self.act2(x)
+        x = self.bn2(x)
+        x = th.nn.functional.avg_pool2d(x,8)
+        x = self.fc1(th.squeeze(x))
+        x = self.act1(x)
+        x = self.fc2(x)
+        return x
+    def get_logs(self):
+       return {'H': 0, 'R': 0, 'S':0 , 'q_norm': 0}
+def make_resnet_50(pretrained=False):
     if pretrained:
-        return tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT)
+        return tv.models.resnet50()
+    else:
+        return tv.models.resnet50(weights=None)
 
 
 class VisionInitializer(InitializerBlock):
@@ -170,3 +198,6 @@ class QIMIA_ViT(nn.Module):
                 kwarg_list.append({})
         return self.model(x,aux_list = kwarg_list)
 
+if __name__ == "__main__":
+    model = make_resnet_50(True)
+    print("yay")
